@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nepali Patient Tracker</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f8ff;
+      padding: 20px;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      color: #004d99;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 10px 20px;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #218838;
+    }
+    .patient-list {
+      margin-top: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #007bff;
+      color: white;
+    }
+    .search-box {
+      margin: 20px 0;
+    }
+    .month-header {
+      background-color: #f9f9f9;
+      padding: 10px;
+      margin-top: 30px;
+      font-size: 20px;
+      font-weight: bold;
+      border-left: 4px solid #007bff;
+      text-align: center;
+    }
+    .summary {
+      font-weight: bold;
+      color: #007bff;
+      margin: 10px 0 5px 0;
+      text-align: center;
+    }
+    .payment-summary {
+      font-weight: bold;
+      margin: 5px 0;
+      text-align: center;
+    }
+    #actionButtons {
+      margin: 20px 0;
+      text-align: center;
+    }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printArea, #printArea * {
+        visibility: visible;
+      }
+      #printArea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+      #actionButtons, #searchBox, button, input, textarea, select {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>🩺 Nepali Patient Tracker</h1>
+
+  <div class="form-group">
+    <label for="date">Date (B.S.):</label>
+    <input type="text" id="date" placeholder="2081-03-01" />
+  </div>
+  <div class="form-group">
+    <label for="name">Name:</label>
+    <input type="text" id="name" />
+  </div>
+  <div class="form-group">
+    <label for="age">Age:</label>
+    <input type="number" id="age" />
+  </div>
+  <div class="form-group">
+    <label for="sex">Sex:</label>
+    <select id="sex">
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+      <option value="Other">Other</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label for="address">Address:</label>
+    <input type="text" id="address" />
+  </div>
+  <div class="form-group">
+    <label for="phone">Phone:</label>
+    <input type="tel" id="phone" />
+  </div>
+  <div class="form-group">
+    <label for="remarks">Remarks (mention QR or cash):</label>
+    <textarea id="remarks"></textarea>
+  </div>
+  <button onclick="savePatient()">Save Patient</button>
+
+  <div class="search-box" id="searchBox">
+    <label>Search by Name:</label>
+    <input type="text" id="searchName" onkeyup="searchPatient()" placeholder="Enter name" />
+  </div>
+
+  <div id="actionButtons">
+    <button onclick="exportExcel()">Export Excel</button>
+    <button onclick="printPDF()">Print PDF</button>
+  </div>
+
+  <div class="patient-list" id="printArea">
+    <h2>Patient List</h2>
+    <div id="groupedPatients"></div>
+  </div>
+
+  <!-- SheetJS library for Excel export -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+  <script>
+    const nepaliMonths = {
+      "01": "Baisakh",
+      "02": "Jestha",
+      "03": "Ashadh",
+      "04": "Shrawan",
+      "05": "Bhadra",
+      "06": "Ashwin",
+      "07": "Kartik",
+      "08": "Mangsir",
+      "09": "Poush",
+      "10": "Magh",
+      "11": "Falgun",
+      "12": "Chaitra"
+    };
+
+    let patients = JSON.parse(localStorage.getItem("patients") || "[]");
+    renderTable();
+
+    function savePatient() {
+      const patient = {
+        date: document.getElementById("date").value,
+        name: document.getElementById("name").value,
+        age: document.getElementById("age").value,
+        sex: document.getElementById("sex").value,
+        address: document.getElementById("address").value,
+        phone: document.getElementById("phone").value,
+        remarks: document.getElementById("remarks").value
+      };
+
+      if (!patient.date || !patient.name) {
+        alert("Please fill at least Date and Name.");
+        return;
+      }
+
+      patients.push(patient);
+      localStorage.setItem("patients", JSON.stringify(patients));
+      renderTable();
+      alert("Saved successfully ✅");
+
+      document.getElementById("date").value = "";
+      document.getElementById("name").value = "";
+      document.getElementById("age").value = "";
+      document.getElementById("sex").value = "Male";
+      document.getElementById("address").value = "";
+      document.getElementById("phone").value = "";
+      document.getElementById("remarks").value = "";
+    }
+
+    function renderTable(patientsList = patients) {
+      const grouped = {};
+      patientsList.forEach(p => {
+        const month = p.date.split("-")[1];
+        if (!grouped[month]) grouped[month] = [];
+        grouped[month].push(p);
+      });
+
+      const container = document.getElementById("groupedPatients");
+      container.innerHTML = "";
+
+      Object.keys(grouped).sort().forEach(month => {
+        const monthPatients = grouped[month];
+        const table = document.createElement("table");
+
+        let qrCount = 0, cashCount = 0;
+        monthPatients.forEach(p => {
+          if (p.remarks.toLowerCase().includes("qr")) qrCount++;
+          if (p.remarks.toLowerCase().includes("cash")) cashCount++;
+        });
+
+        const monthDiv = document.createElement("div");
+        monthDiv.className = "month-header";
+        monthDiv.innerText = `${nepaliMonths[month] || month}`;
+
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>Date (B.S.)</th>
+              <th>Name</th>
+              <th>Age</th>
+              <th>Sex</th>
+              <th>Address</th>
+              <th>Phone</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${monthPatients.map(p => `<tr>
+              <td>${p.date}</td>
+              <td>${p.name}</td>
+              <td>${p.age}</td>
+              <td>${p.sex}</td>
+              <td>${p.address}</td>
+              <td>${p.phone}</td>
+              <td>${p.remarks}</td>
+            </tr>`).join('')}
+          </tbody>`;
+
+        const summary1 = document.createElement("div");
+        summary1.className = "summary";
+        summary1.innerText = `Total patients in ${nepaliMonths[month] || month}: ${monthPatients.length}`;
+
+        const summary2 = document.createElement("div");
+        summary2.className = "payment-summary";
+        summary2.innerText = `Paid by Cash: ${cashCount}`;
+
+        const summary3 = document.createElement("div");
+        summary3.className = "payment-summary";
+        summary3.innerText = `Paid by QR: ${qrCount}`;
+
+        container.appendChild(monthDiv);
+        container.appendChild(table);
+        container.appendChild(summary1);
+        container.appendChild(summary2);
+        container.appendChild(summary3);
+      });
+    }
+
+    function searchPatient() {
+      const searchTerm = document.getElementById("searchName").value.toLowerCase();
+      if (!searchTerm) return renderTable();
+
+      const filtered = patients.filter(p => p.name.toLowerCase().includes(searchTerm));
+      renderTable(filtered);
+    }
+
+    // Export to Excel using SheetJS
+    function exportExcel() {
+      if (patients.length === 0) {
+        alert("No patients to export!");
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+
+      // Group by month
+      const grouped = {};
+      patients.forEach(p => {
+        const month = p.date.split("-")[1];
+        if (!grouped[month]) grouped[month] = [];
+        grouped[month].push(p);
+      });
+
+      Object.keys(grouped).sort().forEach(month => {
+        const monthPatients = grouped[month];
+        // Prepare worksheet data with header
+        const wsData = [
+          ["Date (B.S.)", "Name", "Age", "Sex", "Address", "Phone", "Remarks"]
+        ];
+        monthPatients.forEach(p => {
+          wsData.push([p.date, p.name, p.age, p.sex, p.address, p.phone, p.remarks]);
+        });
+        // Add summary rows
+        const cashCount = monthPatients.filter(p => p.remarks.toLowerCase().includes("cash")).length;
+        const qrCount = monthPatients.filter(p => p.remarks.toLowerCase().includes("qr")).length;
+
+        wsData.push([]);
+        wsData.push([`Total patients in ${nepaliMonths[month] || month}: ${monthPatients.length}`]);
+        wsData.push([`Paid by Cash: ${cashCount}`]);
+        wsData.push([`Paid by QR: ${qrCount}`]);
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, nepaliMonths[month] || month);
+      });
+
+      XLSX.writeFile(wb, "Nepali_Patient_Data.xlsx");
+    }
+
+    // Print-friendly PDF export
+    function printPDF() {
+      window.print();
+    }
+  </script>
+</body>
+</html>
